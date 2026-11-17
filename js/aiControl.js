@@ -149,5 +149,13 @@ const AIControlCenter = {
   }
 };
 
-window.AIControlCenter = AIControlCenter;
+if (typeof window !== 'undefined') {
+  window.AIControlCenter = AIControlCenter;
+}
+if (typeof global !== 'undefined') {
+  global.AIControlCenter = AIControlCenter;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AIControlCenter;
+}
 

@@ -38,15 +38,25 @@ const HandoffManager = {
       const conv = state.conversations[convId];
       if (!conv) return;
 
-      // 1. Pre-Send Review Window Countdown Check
-      if (conv.pendingAutoSend && !conv.pendingAutoSend.isPaused) {
+      // 1. Away Mode Autonomous Auto-Send Countdown Check (noTimer must be false!)
+      if (conv.pendingAutoSend && !conv.pendingAutoSend.isPaused && !conv.pendingAutoSend.noTimer) {
         const draft = conv.pendingAutoSend;
         if (!draft.expiresAt) {
           // Initialize expiresAt if missing
-          draft.expiresAt = now + ((draft.remainingSeconds || 15) * 1000);
+          draft.expiresAt = now + ((draft.remainingSeconds || 5) * 1000);
         }
+
+        const remainingMs = draft.expiresAt - now;
+
+        // Realistic typing state: display Messenger 3-dot bubble during final 2 seconds before auto-sending
+        if (remainingMs <= 2000 && remainingMs > 0 && !draft._aiTypingActive) {
+          draft._aiTypingActive = true;
+          AliasState.setTyping(convId, 'ai', true);
+        }
+
         if (now >= draft.expiresAt) {
           // Grace period elapsed! Dispatch automatically to customer
+          AliasState.setTyping(convId, 'ai', false);
           this.dispatchAutoResponse(convId, true);
         }
       }
@@ -82,16 +92,28 @@ const HandoffManager = {
    * Sets AI pre-send review delay in seconds
    */
   setReviewDelay(seconds) {
-    const sec = parseInt(seconds, 10);
+    const sec = parseInt(seconds, 10) || 15;
     AliasState.update(state => {
       state.aiReviewDelaySeconds = sec;
+      // If any active Away mode draft is running, dynamically update its countdown
+      Object.keys(state.conversations || {}).forEach(cid => {
+        const c = state.conversations[cid];
+        if (c && c.mode === 'away' && c.pendingAutoSend && !c.pendingAutoSend.noTimer && !c.pendingAutoSend.isPaused) {
+          c.pendingAutoSend.totalDelay = sec;
+          c.pendingAutoSend.remainingSeconds = sec;
+          c.pendingAutoSend.expiresAt = Date.now() + (sec * 1000);
+        }
+      });
       return state;
     });
-    AliasState.addAuditLog('system', `AI pre-send review window set to ${sec > 0 ? sec + ' seconds' : 'Disabled (Instant Auto-Send)'}.`);
+    AliasState.addAuditLog('system', `AI Away mode auto-send delay set to ${sec}s.`);
   },
 
   /**
-   * Starts the Pre-Send Review Grace Period for an AI-generated response
+   * Generates AI response according to active mode:
+   * - At Desk: Generates draft and awaits operator approval (NO TIMER)
+   * - Away: Generates draft and dispatches autonomously after natural delay (5s)
+   * - Human: Does not generate AI text; waits for operator
    */
   startAutoSendReview(convId, result, customerSnippet = '') {
     if (!result || !result.responseMessage) return;
@@ -99,39 +121,72 @@ const HandoffManager = {
     this.cancelReviewTimer(convId);
 
     const state = AliasState.get();
-    const delay = (state.aiReviewDelaySeconds !== undefined) ? state.aiReviewDelaySeconds : 15;
+    const conv = state.conversations[convId];
+    if (!conv) return;
 
-    // If review window is 0 or operator is away, dispatch directly without review window
-    if (delay <= 0 || state.operatorPresence === 'away') {
-      this.dispatchImmediate(convId, result.responseMessage, result.nextStepIndex);
-      return;
-    }
-
+    const mode = conv.mode || state.operatorMode || 'at_desk';
     const now = Date.now();
-    const autoDraft = {
-      id: 'auto-draft-' + now,
-      generatedAt: MockAIEngine.getCurrentTime(),
-      customerMessageSnippet: customerSnippet || '',
-      responseMessage: result.responseMessage,
-      nextStepIndex: result.nextStepIndex,
-      totalDelay: delay,
-      remainingSeconds: delay,
-      expiresAt: now + (delay * 1000),
-      isPaused: false,
-      isEditing: false,
-      pausedRemainingSeconds: delay,
-      editedContent: result.responseMessage.content
-    };
 
-    AliasState.update(s => {
-      const c = s.conversations[convId];
-      if (c) {
-        c.pendingAutoSend = autoDraft;
-      }
-      return s;
-    });
+    if (mode === 'at_desk') {
+      // At Desk Mode: AI drafts a reply and waits indefinitely for operator approval (NO TIMER)
+      const autoDraft = {
+        id: 'draft-' + now,
+        generatedAt: MockAIEngine.getCurrentTime(),
+        customerMessageSnippet: customerSnippet || '',
+        responseMessage: result.responseMessage,
+        nextStepIndex: result.nextStepIndex,
+        noTimer: true,
+        isPaused: true,
+        expiresAt: null,
+        totalDelay: null,
+        remainingSeconds: null,
+        isEditing: false,
+        editedContent: result.responseMessage.content
+      };
 
-    AliasState.addAuditLog('ai', `AI generated response for ${convId}. Pre-send review window started (${delay}s countdown).`);
+      AliasState.update(s => {
+        const c = s.conversations[convId];
+        if (c) c.pendingAutoSend = autoDraft;
+        return s;
+      });
+
+      AliasState.addAuditLog('ai', `AI generated draft for ${convId} (At Desk Mode: awaiting human approval without timer).`);
+
+    } else if (mode === 'away') {
+      // Away Mode: Operator is away. AI auto-replies autonomously after configured delay
+      const delay = (state.aiReviewDelaySeconds !== undefined) ? state.aiReviewDelaySeconds : 15;
+      const autoDraft = {
+        id: 'auto-draft-' + now,
+        generatedAt: MockAIEngine.getCurrentTime(),
+        customerMessageSnippet: customerSnippet || '',
+        responseMessage: result.responseMessage,
+        nextStepIndex: result.nextStepIndex,
+        noTimer: false,
+        isPaused: false,
+        totalDelay: delay,
+        remainingSeconds: delay,
+        expiresAt: now + (delay * 1000),
+        isEditing: false,
+        editedContent: result.responseMessage.content
+      };
+
+      AliasState.update(s => {
+        const c = s.conversations[convId];
+        if (c) c.pendingAutoSend = autoDraft;
+        return s;
+      });
+
+      AliasState.addAuditLog('ai', `AI generated autonomous response for ${convId} (Away Mode: auto-dispatching in ${delay}s).`);
+
+    } else {
+      // Human Mode: Full manual control (AI does not generate responses)
+      AliasState.update(s => {
+        const c = s.conversations[convId];
+        if (c) c.pendingAutoSend = null;
+        return s;
+      });
+      AliasState.addAuditLog('human', `Customer message received in ${convId} (Human Mode: awaiting operator response).`);
+    }
   },
 
   /**
@@ -166,6 +221,9 @@ const HandoffManager = {
    */
   dispatchAutoResponse(convId, isAutoTimeout = false) {
     this.cancelReviewTimer(convId);
+    if (typeof AliasState !== 'undefined' && AliasState.setTyping) {
+      AliasState.setTyping(convId, 'ai', false);
+    }
 
     const state = AliasState.get();
     const conv = state.conversations[convId];
@@ -197,6 +255,9 @@ const HandoffManager = {
    */
   pauseAutoReviewForEdit(convId) {
     this.cancelReviewTimer(convId);
+    if (typeof AliasState !== 'undefined' && AliasState.setTyping) {
+      AliasState.setTyping(convId, 'ai', false);
+    }
 
     AliasState.update(s => {
       const c = s.conversations[convId];
@@ -278,6 +339,9 @@ const HandoffManager = {
    */
   holdAutoResponse(convId) {
     this.cancelReviewTimer(convId);
+    if (typeof AliasState !== 'undefined' && AliasState.setTyping) {
+      AliasState.setTyping(convId, 'ai', false);
+    }
 
     AliasState.update(s => {
       const c = s.conversations[convId];
@@ -299,6 +363,9 @@ const HandoffManager = {
    */
   discardAutoResponse(convId) {
     this.cancelReviewTimer(convId);
+    if (typeof AliasState !== 'undefined' && AliasState.setTyping) {
+      AliasState.setTyping(convId, 'ai', false);
+    }
     AliasState.update(s => {
       const c = s.conversations[convId];
       if (c) c.pendingAutoSend = null;
@@ -308,115 +375,89 @@ const HandoffManager = {
   },
 
   /**
-   * Switches operating mode for a conversation ('auto' | 'human' | 'copilot')
+   * Unified Mode Switcher:
+   * 'at_desk' (AI drafts, no timer, awaits approval)
+   * 'away' (AI auto-replies after 5s natural delay)
+   * 'human' (Full manual control; AI generates nothing)
    */
-  setMode(convId, newMode) {
+  setUnifiedMode(convId, newMode) {
     AliasState.update(state => {
+      state.operatorMode = newMode;
       const conv = state.conversations[convId];
       if (!conv) return state;
 
       conv.mode = newMode;
 
-      if (newMode === 'auto') {
+      if (newMode === 'at_desk') {
+        conv.status = 'At Desk';
         conv.handler = 'ai';
-        conv.status = 'AI Active';
         conv.aiEnabled = true;
         conv.takeoverTimerStartedAt = null;
 
+        // In At Desk mode: draft sits waiting for operator approval (no timer!)
         if (conv.pendingAutoSend) {
+          conv.pendingAutoSend.noTimer = true;
+          conv.pendingAutoSend.isPaused = true;
+          conv.pendingAutoSend.expiresAt = null;
+        }
+      } else if (newMode === 'away') {
+        conv.status = 'Away';
+        conv.handler = 'ai';
+        conv.aiEnabled = true;
+        conv.takeoverTimerStartedAt = null;
+
+        // In Away mode: draft auto-sends after configured delay
+        if (conv.pendingAutoSend) {
+          const awayDelay = (state.aiReviewDelaySeconds !== undefined) ? state.aiReviewDelaySeconds : 15;
+          conv.pendingAutoSend.noTimer = false;
           conv.pendingAutoSend.isPaused = false;
-          conv.pendingAutoSend.isEditing = false;
-          const sec = conv.pendingAutoSend.pausedRemainingSeconds || conv.pendingAutoSend.remainingSeconds || 5;
-          conv.pendingAutoSend.remainingSeconds = sec;
-          conv.pendingAutoSend.expiresAt = Date.now() + (sec * 1000);
+          conv.pendingAutoSend.totalDelay = awayDelay;
+          conv.pendingAutoSend.remainingSeconds = awayDelay;
+          conv.pendingAutoSend.expiresAt = Date.now() + (awayDelay * 1000);
         }
       } else if (newMode === 'human') {
+        conv.status = 'Human';
         conv.handler = 'human';
-        conv.status = 'Human Active';
+        conv.aiEnabled = false;
         conv.takeoverTimerStartedAt = null;
 
-        if (conv.pendingAutoSend) {
-          conv.pendingAutoSend.isPaused = true;
-          const now = Date.now();
-          const rem = Math.max(0, Math.ceil(((conv.pendingAutoSend.expiresAt || now) - now) / 1000));
-          conv.pendingAutoSend.pausedRemainingSeconds = rem > 0 ? rem : (conv.pendingAutoSend.remainingSeconds || 5);
-        }
-      } else if (newMode === 'copilot') {
-        conv.handler = 'human';
-        conv.status = 'AI Copilot';
-        conv.aiEnabled = true;
-        conv.takeoverTimerStartedAt = null;
-
-        if (conv.pendingAutoSend) {
-          conv.pendingAutoSend.isPaused = true;
-        }
+        // In Human mode: clear any pending AI auto-send draft
+        conv.pendingAutoSend = null;
       }
 
       return state;
     });
 
-    AliasState.addAuditLog('system', `Conversation ${convId} mode changed to ${newMode.toUpperCase()}.`);
+    const label = newMode === 'at_desk' ? 'AT DESK (Supervised - No Timer)' : (newMode === 'away' ? 'AWAY (Autonomous AI)' : 'HUMAN (Manual Only)');
+    AliasState.addAuditLog('system', `Conversation ${convId} mode switched to ${label}.`);
   },
 
   /**
-   * Human operator manually takes over conversation from AI
+   * Switches operating mode for a conversation (legacy compatibility)
+   */
+  setMode(convId, newMode) {
+    let mapped = newMode;
+    if (newMode === 'auto') mapped = 'at_desk';
+    else if (newMode === 'copilot') mapped = 'at_desk';
+    this.setUnifiedMode(convId, mapped);
+  },
+
+  /**
+   * Human operator manually takes over conversation from AI (switches to Human mode)
    */
   takeOver(convId, operatorName = 'Human Operator (Sarah K.)') {
     this.cancelTakeoverTimer(convId);
-
-    AliasState.update(state => {
-      const conv = state.conversations[convId];
-      if (!conv) return state;
-
-      conv.mode = 'human';
-      conv.handler = 'human';
-      conv.status = 'Human Active';
-      conv.humanAvailable = true;
-      conv.takeoverTimerStartedAt = null;
-
-      // If pending auto-send draft exists, pause it automatically
-      if (conv.pendingAutoSend) {
-        conv.pendingAutoSend.isPaused = true;
-        const now = Date.now();
-        const rem = Math.max(0, Math.ceil(((conv.pendingAutoSend.expiresAt || now) - now) / 1000));
-        conv.pendingAutoSend.pausedRemainingSeconds = rem > 0 ? rem : (conv.pendingAutoSend.remainingSeconds || 5);
-      }
-
-      return state;
-    });
-
-    AliasState.addAuditLog('human', `${operatorName} manually took over conversation ${convId}. Automatic AI send paused.`);
+    this.setUnifiedMode(convId, 'human');
+    AliasState.addAuditLog('human', `${operatorName} manually took over conversation ${convId}. Full manual control enabled.`);
   },
 
   /**
-   * Human operator returns conversation to AI
+   * Human operator returns conversation to AI (switches to At Desk mode)
    */
   returnToAI(convId) {
     this.cancelTakeoverTimer(convId);
-
-    AliasState.update(state => {
-      const conv = state.conversations[convId];
-      if (!conv) return state;
-
-      conv.mode = 'auto';
-      conv.handler = 'ai';
-      conv.status = 'AI Active';
-      conv.aiEnabled = true;
-      conv.takeoverTimerStartedAt = null;
-
-      // If pending draft was paused, resume countdown!
-      if (conv.pendingAutoSend) {
-        conv.pendingAutoSend.isPaused = false;
-        conv.pendingAutoSend.isEditing = false;
-        const sec = conv.pendingAutoSend.pausedRemainingSeconds || conv.pendingAutoSend.remainingSeconds || 5;
-        conv.pendingAutoSend.remainingSeconds = sec;
-        conv.pendingAutoSend.expiresAt = Date.now() + (sec * 1000);
-      }
-
-      return state;
-    });
-
-    AliasState.addAuditLog('ai', `Control returned to AI for conversation ${convId}. Resuming automated intake.`);
+    this.setUnifiedMode(convId, 'at_desk');
+    AliasState.addAuditLog('ai', `Control returned to AI for conversation ${convId}. At Desk supervised mode active.`);
 
     const curr = AliasState.get().conversations[convId];
     if (!curr || !curr.pendingAutoSend) {

@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAttach = document.getElementById('btn-attach');
   const chatFileInput = document.getElementById('chat-file-input');
   const attachmentPreviewContainer = document.getElementById('attachment-preview-container');
+  const selectActiveCustomer = document.getElementById('select-active-customer');
   let attachedFiles = [];
 
   // Active customer conversation resolution (URL param -> LocalStorage -> Default)
@@ -42,8 +43,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const convParam = urlParams.get('conv');
     const validIds = ['demo-001', 'demo-002', 'demo-003', 'demo-004'];
     if (convParam && validIds.includes(convParam)) {
+      localStorage.setItem('alias_active_conv', convParam);
       localStorage.setItem('alias_customer_active_conv', convParam);
       return convParam;
+    }
+    const sharedActive = localStorage.getItem('alias_active_conv');
+    if (sharedActive && validIds.includes(sharedActive)) {
+      return sharedActive;
     }
     const stored = localStorage.getItem('alias_customer_active_conv');
     if (stored && validIds.includes(stored)) {
@@ -120,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!newConvId) return;
     currentConvId = newConvId;
     localStorage.setItem('alias_customer_active_conv', newConvId);
+    localStorage.setItem('alias_active_conv', newConvId);
 
     // Update URL query parameter cleanly without reloading page
     const url = new URL(window.location);
@@ -139,6 +146,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (conv) {
       showToast(`Switched customer view to ${conv.customerName} (${conv.businessName}).`, 'info');
     }
+  }
+
+  if (selectActiveCustomer) {
+    selectActiveCustomer.value = currentConvId;
+    selectActiveCustomer.addEventListener('change', (e) => {
+      switchCustomer(e.target.value);
+    });
   }
 
   let currentCustomerFilter = 'all';
@@ -261,28 +275,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const conv = state.conversations[currentConvId];
     if (!conv) return;
 
+    const mode = conv.mode || 'at_desk';
+    if (mode === 'human') {
+      showTyping(false);
+      return;
+    }
+
     showTyping(true);
 
     setTimeout(() => {
       const result = MockAIEngine.processCustomerMessage(currentConvId, null, actionPayload);
-      const curState = AliasState.get();
-
-      if (curState.operatorPresence === 'present' && (curState.aiReviewDelaySeconds || 0) > 0) {
-        // Operator is present: Enter review grace period
-        showTyping(true);
-        HandoffManager.startAutoSendReview(currentConvId, result, actionPayload.value || 'Selected option');
-      } else {
-        // Operator is away or review disabled: auto-dispatch immediately!
-        showTyping(false);
-        if (result && result.responseMessage) {
-          AliasState.update(s => {
-            const c = s.conversations[currentConvId];
-            c.messages.push(result.responseMessage);
-            if (result.nextStepIndex !== null) c.stepIndex = result.nextStepIndex;
-            return s;
-          });
-        }
-      }
+      showTyping(false);
+      HandoffManager.startAutoSendReview(currentConvId, result, actionPayload.value || 'Selected option');
     }, 600);
   }
 
@@ -301,6 +305,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     chatInput.value = '';
     chatInput.style.height = 'auto';
+
+    if (customerTypingTimeout) {
+      clearTimeout(customerTypingTimeout);
+      customerTypingTimeout = null;
+    }
+    AliasState.setTyping(currentConvId, 'customer', false);
 
     const stateBefore = AliasState.get();
     const curConv = stateBefore.conversations[currentConvId] || {};
@@ -338,53 +348,69 @@ document.addEventListener('DOMContentLoaded', () => {
     const state = AliasState.get();
     const conv = state.conversations[currentConvId];
 
-    // Determine reaction based on mode and availability
-    if (conv.mode === 'auto' && state.globalAiEnabled) {
-      showTyping(true);
-      const delay = Math.min(1400, Math.max(800, text.length * 20));
+    // Determine reaction based on mode
+    const mode = conv.mode || 'at_desk';
 
-      setTimeout(() => {
-        const result = MockAIEngine.processCustomerMessage(currentConvId, text);
-        const curState = AliasState.get();
-
-        if (curState.operatorPresence === 'present' && (curState.aiReviewDelaySeconds || 0) > 0) {
-          // Operator is at desk: show typing to customer, start review grace period in operator console!
-          showTyping(true);
-          HandoffManager.startAutoSendReview(currentConvId, result, text);
-        } else {
-          // Operator is away or instant send enabled: dispatch directly!
-          showTyping(false);
-          if (result && result.responseMessage) {
-            AliasState.update(s => {
-              const c = s.conversations[currentConvId];
-              c.messages.push(result.responseMessage);
-              if (result.nextStepIndex !== null) c.stepIndex = result.nextStepIndex;
-              return s;
-            });
-          }
-        }
-      }, delay);
-    } else if (conv.mode === 'copilot') {
-      // AI Copilot Mode: AI generates a draft in background for the operator!
-      const draft = MockAIEngine.generateCopilotDraft(customerMsg, conv);
-      AliasState.update(s => {
-        s.conversations[currentConvId].pendingDraft = draft;
-        return s;
-      });
-      AliasState.addAuditLog('ai', `AI Copilot generated a draft response for operator approval in ${currentConvId}.`);
-    } else if (conv.mode === 'human') {
-      // Human Mode: Schedule takeover check if unanswered
-      HandoffManager.scheduleTakeoverCheck(currentConvId);
+    if (mode === 'human') {
+      showTyping(false);
+      // Human mode: awaiting manual operator reply
+      return;
     }
+
+    // Process customer message in background and prepare draft
+    const delay = Math.min(1000, Math.max(400, text.length * 12));
+
+    setTimeout(() => {
+      const result = MockAIEngine.processCustomerMessage(currentConvId, text);
+      showTyping(false);
+      HandoffManager.startAutoSendReview(currentConvId, result, text);
+    }, delay);
   }
 
-  // Show/Hide typing
-  function showTyping(show) {
+  // Show/Hide typing (Messenger 3-dot animated bubble)
+  const customerTypingAvatar = document.getElementById('customer-typing-avatar');
+  function showTyping(show, role = 'operator') {
     if (typingIndicator) {
-      typingIndicator.style.display = show ? 'inline-flex' : 'none';
-      if (show) ChatRenderer.scrollToBottom(chatMessagesEl);
+      if (customerTypingAvatar) {
+        if (role === 'ai') {
+          customerTypingAvatar.className = 'avatar avatar-ai';
+          customerTypingAvatar.textContent = 'AI';
+        } else {
+          customerTypingAvatar.className = 'avatar avatar-human';
+          customerTypingAvatar.textContent = 'SK';
+        }
+      }
+      typingIndicator.style.display = show ? 'flex' : 'none';
+      if (show && chatMessagesEl) {
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      }
     }
   }
+
+  // Cross-tab Typing Listener: receives Operator and Away-Mode AI typing events
+  let remoteTypingTimeout = null;
+  AliasState.subscribeTyping((event) => {
+    if (event.convId !== currentConvId) return;
+    if (event.role === 'operator' || event.role === 'ai') {
+      if (event.isTyping) {
+        showTyping(true, event.role);
+        if (remoteTypingTimeout) clearTimeout(remoteTypingTimeout);
+        remoteTypingTimeout = setTimeout(() => {
+          showTyping(false);
+        }, 3500);
+      } else {
+        if (remoteTypingTimeout) clearTimeout(remoteTypingTimeout);
+        showTyping(false);
+      }
+    }
+  });
+
+  // Cross-tab Active Conversation Synchronizer
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'alias_active_conv' && e.newValue && e.newValue !== currentConvId) {
+      switchCustomer(e.newValue);
+    }
+  });
 
   // Send button & Enter key
   btnSend.addEventListener('click', sendMessage);
@@ -395,10 +421,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Auto-resize input
+  // Auto-resize input & broadcast Customer typing state
+  let customerTypingTimeout = null;
+  function notifyCustomerTyping() {
+    if (chatInput.value.trim().length > 0) {
+      AliasState.setTyping(currentConvId, 'customer', true);
+      if (customerTypingTimeout) clearTimeout(customerTypingTimeout);
+      customerTypingTimeout = setTimeout(() => {
+        AliasState.setTyping(currentConvId, 'customer', false);
+      }, 2500);
+    } else {
+      if (customerTypingTimeout) clearTimeout(customerTypingTimeout);
+      AliasState.setTyping(currentConvId, 'customer', false);
+    }
+  }
+
   chatInput.addEventListener('input', () => {
     chatInput.style.height = 'auto';
     chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+    notifyCustomerTyping();
+  });
+
+  chatInput.addEventListener('keyup', (e) => {
+    if (e.key !== 'Enter') notifyCustomerTyping();
+  });
+
+  window.addEventListener('beforeunload', () => {
+    AliasState.setTyping(currentConvId, 'customer', false);
   });
 
   // Render Drawer Content (Editable Campaign Info)
@@ -618,6 +667,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Render customer conversations sidebar
     renderCustomerSidebar(state);
 
+    if (selectActiveCustomer) {
+      selectActiveCustomer.value = currentConvId;
+    }
+
     // Synchronize Operator Dashboard link so clicking it opens this customer
     if (navLinkOperator) {
       navLinkOperator.href = `operator.html?conv=${currentConvId}`;
@@ -690,13 +743,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toggle Review Final Brief button: Activates ONLY once intake is finished!
     if (btnReviewFinalBrief) {
       btnReviewFinalBrief.style.display = (prog.isComplete || conv.campaign.confirmed) ? 'inline-flex' : 'none';
-    }
-
-    // If there is an active pre-send review in progress (and not paused by operator), show typing indicator to customer
-    if (conv.pendingAutoSend && !conv.pendingAutoSend.isPaused) {
-      showTyping(true);
-    } else {
-      showTyping(false);
     }
 
     // Messages

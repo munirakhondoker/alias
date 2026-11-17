@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Alias — AI Campaign Brief Assistant</title>
-  <link rel="stylesheet" href="css/style.css?v=7">
-  <link rel="stylesheet" href="css/layout.css?v=7">
-  <link rel="stylesheet" href="css/components.css?v=7">
-  <link rel="stylesheet" href="css/chat.css?v=7">
-  <link rel="stylesheet" href="css/dashboard.css?v=7">
+  <link rel="stylesheet" href="css/style.css?v=27">
+  <link rel="stylesheet" href="css/layout.css?v=27">
+  <link rel="stylesheet" href="css/components.css?v=27">
+  <link rel="stylesheet" href="css/chat.css?v=27">
+  <link rel="stylesheet" href="css/dashboard.css?v=27">
 </head>
 <body>
   <div class="app-wrapper">
@@ -46,41 +46,9 @@
       </div>
     </header>
 
-    <!-- Customer Experience Center Frame (2-Column with Customer Conversations Sidebar) -->
+    <!-- Customer Experience Center Frame (Single-Column Conversational Intake) -->
     <main class="customer-layout">
-      <!-- Left Column: Customer Conversations Sidebar (matches Operator Console) -->
-      <section class="conversations-sidebar customer-sidebar" aria-label="Customer conversations">
-        <div class="sidebar-header">
-          <div class="sidebar-title-row">
-            <span class="sidebar-title">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              Conversations
-            </span>
-            <span class="badge badge-neutral" style="font-size:11px;">4 Active</span>
-          </div>
-
-          <!-- Search Input -->
-          <div class="search-wrapper">
-            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input type="text" class="search-input" id="customer-search" placeholder="Search customer or business..." aria-label="Search conversations">
-          </div>
-
-          <!-- Filter Chips -->
-          <div class="filter-chips">
-            <button class="filter-chip customer-filter-chip active" data-filter="all">All</button>
-            <button class="filter-chip customer-filter-chip" data-filter="ai_active">AI Active</button>
-            <button class="filter-chip customer-filter-chip" data-filter="human_active">Human Active</button>
-            <button class="filter-chip customer-filter-chip" data-filter="copilot">AI Copilot</button>
-          </div>
-        </div>
-
-        <!-- Conversation Cards (All 4 customers from Operator Console) -->
-        <div class="conversations-list" id="customer-list-container" role="list">
-          <!-- Rendered dynamically -->
-        </div>
-      </section>
-
-      <!-- Right Column: Active Customer Conversation Frame -->
+      <!-- Active Customer Conversation Frame -->
       <div class="customer-card-frame">
         <!-- Chat Header -->
         <div class="chat-header">
@@ -89,7 +57,9 @@
               TA
             </div>
             <div>
-              <div class="chat-header-title" id="chat-header-business">Lumina Skincare Campaign Intake</div>
+              <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                <span class="chat-header-title" id="chat-header-business">Lumina Skincare Campaign Intake</span>
+              </div>
               <div class="chat-header-status" id="header-status">
                 <span class="badge-dot ai"></span>
                 <span>Alias AI Assistant Connected</span>
@@ -97,17 +67,6 @@
             </div>
           </div>
           <div style="display:flex; align-items:center; gap:0.625rem;">
-            <!-- Progressive Intake Stepper (shown during intake) -->
-            <div class="customer-intake-progress" id="customer-intake-stepper" title="Click to review answers collected so far">
-              <div class="stepper-meta">
-                <span class="stepper-label" id="customer-step-label">Step 1 of 6</span>
-                <span class="stepper-topic" id="customer-step-topic">• Business Info</span>
-              </div>
-              <div class="stepper-track">
-                <div class="stepper-bar" id="customer-step-bar" style="width: 15%;"></div>
-              </div>
-            </div>
-
             <!-- Review Final Brief button: Activates ONLY once intake is finished! -->
             <button class="btn btn-primary btn-sm" id="btn-review-final-brief" style="display:none;" title="Review and confirm your completed campaign brief">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="20 6 9 17 4 12"/></svg>
@@ -121,13 +80,13 @@
           <!-- Messages will be rendered here dynamically -->
         </div>
 
-        <!-- Typing Indicator -->
-        <div id="typing-indicator" style="display:none; padding: 0 1.25rem 0.75rem 1.25rem;">
-          <div class="typing-indicator">
+        <!-- Typing Indicator (Messenger 3-Dot Animated Bubble) -->
+        <div id="typing-indicator" class="typing-indicator-row" style="display:none;" aria-label="Typing">
+          <div class="avatar avatar-human" id="customer-typing-avatar" style="width:28px; height:28px; font-size:11px; margin-right:8px; flex-shrink:0;">SK</div>
+          <div class="typing-bubble">
             <span class="typing-dot"></span>
             <span class="typing-dot"></span>
             <span class="typing-dot"></span>
-            <span style="font-size:12px; color:#64748b; margin-left:4px;">Alias AI is formulating response...</span>
           </div>
         </div>
 
@@ -153,10 +112,6 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               <span>Send</span>
             </button>
-          </div>
-          <div class="composer-footer">
-            <span id="header-subtitle">Automated intake workflow active</span>
-            <span>Enter to send • Shift+Enter for newline</span>
           </div>
         </div>
       </div>
@@ -192,13 +147,13 @@
   </div>
 
   <!-- JavaScript Modules -->
-  <script src="js/state.js?v=7"></script>
-  <script src="js/campaign.js?v=7"></script>
-  <script src="js/mockAI.js?v=7"></script>
-  <script src="js/handoff.js?v=7"></script>
-  <script src="js/aiControl.js?v=7"></script>
-  <script src="js/chat.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="js/state.js?v=27"></script>
+  <script src="js/campaign.js?v=27"></script>
+  <script src="js/mockAI.js?v=27"></script>
+  <script src="js/handoff.js?v=27"></script>
+  <script src="js/aiControl.js?v=27"></script>
+  <script src="js/chat.js?v=27"></script>
+  <script src="js/app.js?v=27"></script>
 </body>
 </html>
 

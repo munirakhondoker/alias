@@ -498,4 +498,10 @@ const ChatRenderer = {
 };
 
 window.ChatRenderer = ChatRenderer;
+if (typeof global !== 'undefined') {
+  global.ChatRenderer = ChatRenderer;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = ChatRenderer;
+}
 

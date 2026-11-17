@@ -118,7 +118,7 @@ const MockAIEngine = {
             senderLabel: 'Alias AI Assistant',
             timestamp: this.getCurrentTime(),
             type: 'text',
-            content: `Excellent choice. We'll tailor this brief for **${industry}**.\n\nCould you describe your specific product or service? What makes your offering unique compared to other brands (your Unique Selling Proposition)?`,
+            content: `Could you describe your specific product or service, and what makes your offering unique compared to other brands (your Unique Selling Proposition)?`,
             status: 'delivered'
           },
           nextStep: 2
@@ -183,7 +183,7 @@ const MockAIEngine = {
               senderLabel: 'Alias AI Assistant',
               timestamp: this.getCurrentTime(),
               type: 'card_audience',
-              content: `Noted: Primary objective is **${objective}**.\n\nNow let's define your **Target Audience**. Who are your primary buyers?`,
+              content: `Who is your **Target Audience**? Who are your primary buyers?`,
               interactiveData: {
                 actionKey: 'submit_audience',
                 ageOptions: ['18-24', '25-34', '35-44', '45+'],
@@ -211,7 +211,7 @@ const MockAIEngine = {
             senderLabel: 'Alias AI Assistant',
             timestamp: this.getCurrentTime(),
             type: 'card_audience',
-            content: `Recorded channel: **${val}**.\n\nNow let's define your **Target Audience**. Who is this campaign designed to reach?`,
+            content: `Who is your **Target Audience**? Who is this campaign designed to reach?`,
             interactiveData: {
               actionKey: 'submit_audience',
               ageOptions: ['18-24', '25-34', '35-44', '45+'],
@@ -240,7 +240,7 @@ const MockAIEngine = {
             senderLabel: 'Alias AI Assistant',
             timestamp: this.getCurrentTime(),
             type: 'card_platforms',
-            content: `Target audience configured for **${campaign.audience.ageRange}**, **${campaign.audience.gender}** in **${Array.isArray(campaign.audience.location) ? campaign.audience.location.join(', ') : campaign.audience.location}**.\n\nWhich **Advertising Platforms** and **Creative Formats** should Alias target?`,
+            content: `Which **Advertising Platforms** and **Creative Formats** should we target?`,
             interactiveData: {
               actionKey: 'submit_platforms',
               platforms: ['Facebook', 'Instagram', 'LinkedIn', 'TikTok'],
@@ -265,7 +265,7 @@ const MockAIEngine = {
             senderLabel: 'Alias AI Assistant',
             timestamp: this.getCurrentTime(),
             type: 'card_schedule',
-            content: `Platforms saved: **${plats.join(', ')}** using **${formats.join(', ')}**.\n\nNext, what is your planned **Campaign Schedule**? Please choose start and end dates.`,
+            content: `What is your planned **Campaign Schedule**? Please choose start and end dates:`,
             interactiveData: {
               actionKey: 'submit_schedule'
             },
@@ -307,7 +307,7 @@ const MockAIEngine = {
             senderLabel: 'Alias AI Assistant',
             timestamp: this.getCurrentTime(),
             type: 'card_budget',
-            content: `Campaign scheduled for **${duration} days** (${sDate} to ${eDate}).\n\nLastly, what is your total **Advertising Budget**? (Default currency is BDT).`,
+            content: `What is your total **Advertising Budget**? (Default currency is BDT)`,
             interactiveData: {
               actionKey: 'submit_budget',
               durationDays: duration
@@ -425,7 +425,7 @@ const MockAIEngine = {
           senderLabel: 'Alias AI Assistant',
           timestamp: this.getCurrentTime(),
           type: 'card_objectives',
-          content: `Thank you! I've recorded your business details: "${originalText}".\n\nWhat is your **Primary Marketing Objective** for this campaign?`,
+          content: `What is your **Primary Marketing Objective** for this campaign?`,
           interactiveData: {
             actionKey: 'select_objective',
             options: [
@@ -455,7 +455,7 @@ const MockAIEngine = {
           senderLabel: 'Alias AI Assistant',
           timestamp: this.getCurrentTime(),
           type: 'card_objectives',
-          content: `Great USP! What is the **Primary Marketing Objective** for this campaign?`,
+          content: `What is the **Primary Marketing Objective** for this campaign?`,
           interactiveData: {
             actionKey: 'select_objective',
             options: [
@@ -495,7 +495,7 @@ const MockAIEngine = {
           senderLabel: 'Alias AI Assistant',
           timestamp: this.getCurrentTime(),
           type: 'card_audience',
-          content: `Primary objective set to **${campaign.objective.primary}**.\n\nNow let's specify your **Target Audience** (age, gender, target locations, or interests):`,
+          content: `Who is your **Target Audience** (age, gender, target locations, or interests)?`,
           interactiveData: {
             actionKey: 'submit_audience',
             ageOptions: ['18-24', '25-34', '35-44', '45+'],
@@ -527,7 +527,7 @@ const MockAIEngine = {
           senderLabel: 'Alias AI Assistant',
           timestamp: this.getCurrentTime(),
           type: 'card_platforms',
-          content: `Audience recorded: "${originalText}".\n\nWhich **Advertising Platforms** and formats should we select?`,
+          content: `Which **Advertising Platforms** and formats should we select?`,
           interactiveData: {
             actionKey: 'submit_platforms',
             platforms: ['Facebook', 'Instagram', 'LinkedIn', 'TikTok'],
@@ -556,7 +556,7 @@ const MockAIEngine = {
           senderLabel: 'Alias AI Assistant',
           timestamp: this.getCurrentTime(),
           type: 'card_schedule',
-          content: `Platforms noted: **${campaign.platforms.join(', ')}**.\n\nPlease select your campaign schedule dates:`,
+          content: `Please select your campaign schedule dates:`,
           interactiveData: { actionKey: 'submit_schedule' },
           status: 'delivered'
         },
@@ -577,7 +577,7 @@ const MockAIEngine = {
           senderLabel: 'Alias AI Assistant',
           timestamp: this.getCurrentTime(),
           type: 'card_budget',
-          content: `Schedule set for **20 days**.\n\nNow, what is your total **Advertising Budget** in BDT?`,
+          content: `What is your total **Advertising Budget** in BDT?`,
           interactiveData: {
             actionKey: 'submit_budget',
             durationDays: 20
@@ -625,7 +625,7 @@ const MockAIEngine = {
         senderLabel: 'Alias AI Assistant',
         timestamp: this.getCurrentTime(),
         type: 'text',
-        content: `I've noted that: "${originalText}". Let's continue completing the remaining sections of your campaign brief.`,
+        content: `What additional details regarding your target audience, platforms, or budget can you share for this campaign?`,
         status: 'delivered'
       },
       nextStep: step
@@ -708,6 +708,215 @@ const MockAIEngine = {
     };
   },
 
+  /**
+   * Generates proactive AI suggestions, talking points, and smart prompts
+   * by analyzing the live conversation history and campaign brief state
+   */
+  /**
+   * Generates proactive, dynamic AI questions based on conversation context,
+   * customer responses, and missing brief information.
+   * Clean and streamlined - no unnecessary essays or static fluff.
+   */
+  generateSuggestions(conv) {
+    if (!conv) return null;
+    const campaign = conv.campaign || {};
+    const msgs = conv.messages || [];
+    const step = conv.stepIndex || 0;
+    const businessName = conv.businessName || 'the customer';
+    const industry = (campaign.business && campaign.business.industry) || 'general commerce';
+
+    const lastCustMsg = [...msgs].reverse().find(m => m.sender === 'customer');
+    const custText = lastCustMsg ? (lastCustMsg.content || '').toLowerCase() : '';
+
+    // Check if brief is complete
+    let isComplete = false;
+    let missingSecs = [];
+    if (typeof CampaignManager !== 'undefined') {
+      const p = CampaignManager.calculateProgress(campaign);
+      isComplete = p.isComplete || Boolean(campaign.confirmed);
+      if (p.sections) {
+        Object.keys(p.sections).forEach(k => {
+          if (p.sections[k].status !== 'completed') {
+            missingSecs.push(p.sections[k]);
+          }
+        });
+      }
+    }
+
+    if (isComplete) {
+      return {
+        stage: 'Campaign Brief Finalized',
+        questions: [
+          {
+            tag: 'Intake Sign-off',
+            title: 'Confirm & Advance Pipeline',
+            text: `Your campaign brief for ${businessName} is fully compiled and ready. Shall we proceed to advance this to Agent 2 for Product Intelligence & Market Research?`
+          },
+          {
+            tag: 'Audience Strategy',
+            title: 'Confirm Demographic Profile',
+            text: `Before our creative team produces ads, would you like to review the finalized audience targeting settings for ${businessName}?`
+          },
+          {
+            tag: 'Deliverable Copy',
+            title: 'Send Brief Summary to Email',
+            text: `Would you like a summarized copy of this finalized campaign brief sent to your registered email address?`
+          }
+        ]
+      };
+    }
+
+    // Dynamic questions tailored to what customer just said or current stage
+    if (custText.includes('budget') || custText.includes('cost') || custText.includes('bdt') || custText.includes('tk') || step >= 5) {
+      return {
+        stage: 'Budget & Flight Duration',
+        questions: [
+          {
+            tag: 'Budget Guidance',
+            title: 'Recommended Budget Range',
+            text: `For ${industry}, an initial budget of 30,000–50,000 BDT over 14 to 21 days provides sufficient conversion data for algorithm learning. Would that fit your plan?`
+          },
+          {
+            tag: 'Daily Spend Cap',
+            title: 'Specify Daily Cap',
+            text: `What is your target maximum daily ad spend in BDT to ensure we don't exceed your threshold?`
+          },
+          {
+            tag: 'Pacing Strategy',
+            title: 'Flight Pacing Preference',
+            text: `Would you prefer an equal daily spend distribution or heavier ad delivery on weekends when shopper activity peaks?`
+          },
+          {
+            tag: 'Timeline',
+            title: 'Confirm Launch Schedule',
+            text: `What is your target start date for this campaign, and how many weeks would you like the flight to run?`
+          }
+        ]
+      };
+    }
+
+    if (custText.includes('platform') || custText.includes('facebook') || custText.includes('instagram') || custText.includes('google') || custText.includes('reels') || step === 4) {
+      return {
+        stage: 'Advertising Channels & Formats',
+        questions: [
+          {
+            tag: 'Channel Mix',
+            title: 'Recommended Channel Mix',
+            text: `For ${businessName}, short-form video reels on Instagram & Facebook paired with targeted Google Search intent usually deliver the best ROI. Shall we structure around those?`
+          },
+          {
+            tag: 'Creative Assets',
+            title: 'Vertical Video Readiness',
+            text: `Do you currently have vertical video assets (Reels/TikTok style) ready, or would you like our creative studio to produce them?`
+          },
+          {
+            tag: 'Ad Placements',
+            title: 'Feed vs Story Placements',
+            text: `Would you like to include automatic story placements to maximize reach across younger mobile audiences?`
+          },
+          {
+            tag: 'Destination',
+            title: 'Traffic Destination',
+            text: `Where should the ads direct prospective customers—to your website product page, a WhatsApp chat, or Facebook Messenger?`
+          }
+        ]
+      };
+    }
+
+    if (custText.includes('audience') || custText.includes('age') || custText.includes('city') || custText.includes('dhaka') || (step >= 2 && step <= 3)) {
+      return {
+        stage: 'Target Audience & Geography',
+        questions: [
+          {
+            tag: 'Audience Profile',
+            title: 'Core Buyer Persona',
+            text: `Based on your ${industry} focus, we suggest targeting age 22–38 in major urban centers. What age demographic represents your highest-value customers?`
+          },
+          {
+            tag: 'Geo-Targeting',
+            title: 'Geographic Coverage',
+            text: `Are you delivering products nationwide across Bangladesh, or focusing primarily on major metro areas like Dhaka and Chittagong?`
+          },
+          {
+            tag: 'Interests & Behaviors',
+            title: 'Buyer Lifestyle Interests',
+            text: `What specific lifestyle interests, hobbies, or shopping behaviors characterize your ideal buyer for ${businessName}?`
+          },
+          {
+            tag: 'Gender Split',
+            title: 'Gender Targeting Preference',
+            text: `Should the campaign target all genders equally, or does ${businessName} cater primarily to men or women?`
+          }
+        ]
+      };
+    }
+
+    // Default: Initial Intake & Business Info
+    return {
+      stage: 'Business & Value Proposition',
+      questions: [
+        {
+          tag: 'Unique Value',
+          title: 'Core Differentiator (USP)',
+          text: `To craft compelling ad copy, could you share what unique advantage makes ${businessName} stand out from local competitors?`
+        },
+        {
+          tag: 'Product Highlight',
+          title: 'Hero Product Focus',
+          text: `Which specific product or service should take center stage in this campaign to drive the strongest immediate conversions?`
+        },
+        {
+          tag: 'Digital Presence',
+          title: 'Catalog & Website Link',
+          text: `Could you share your website, Facebook page, or product catalog link for ${businessName}?`
+        },
+        {
+          tag: 'Marketing Goal',
+          title: 'Primary Campaign Objective',
+          text: `Is your primary objective for this campaign direct sales/purchases, generating customer inquiries/leads, or broad brand awareness?`
+        }
+      ]
+    };
+  },
+
+  /**
+   * Generates a tailored AI question specifically to elicit missing fields
+   * for a given Campaign Brief intake section.
+   */
+  generateMissingFieldQuestion(sectionKey, missingFields = [], businessName = 'your business') {
+    const missingStr = missingFields.join(', ');
+    switch (sectionKey) {
+      case 'business':
+        if (missingFields.some(f => f.toLowerCase().includes('usp'))) {
+          return `Could you share what makes ${businessName} unique and sets your products apart from competitors in your market?`;
+        }
+        if (missingFields.some(f => f.toLowerCase().includes('website'))) {
+          return `Could you provide your official website URL or social store link for ${businessName}?`;
+        }
+        return `Could you share a brief overview of the product or service you'd like to promote for ${businessName}?`;
+
+      case 'objective':
+        return `What is your primary commercial goal for this campaign—direct sales/orders, qualified lead inquiries, or brand awareness?`;
+
+      case 'audience':
+        if (missingFields.some(f => f.toLowerCase().includes('location'))) {
+          return `Which geographic regions or cities (e.g. Dhaka, nationwide) should we target for ${businessName}?`;
+        }
+        return `What age range and demographics represent your ideal target customers for this campaign?`;
+
+      case 'platforms':
+        return `Which advertising channels (such as Facebook, Instagram Reels, Google Search, or YouTube) would you like to focus on?`;
+
+      case 'schedule':
+        return `When would you like this campaign to launch, and what is your intended flight duration (in days or weeks)?`;
+
+      case 'budget':
+        return `What is your target overall advertising budget (in BDT or USD) for this campaign duration?`;
+
+      default:
+        return `Could you provide additional details regarding ${missingStr || 'this section'} for ${businessName}?`;
+    }
+  },
   getCurrentTime() {
     const now = new Date();
     return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

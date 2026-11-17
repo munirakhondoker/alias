@@ -10,13 +10,14 @@ const STATE_EVENT = 'alias:state_updated';
 // Initial default state with realistic enterprise mock data
 const DEFAULT_STATE = {
   activeConversationId: 'demo-001',
+  operatorMode: 'at_desk', // 'at_desk' (Supervised - No timer) | 'away' (Autonomous - Auto-send) | 'human' (Manual control only)
   globalAiEnabled: true,
   globalCopilotEnabled: true,
   scheduledModeEnabled: false,
-  takeoverDelaySeconds: 15, // Default fast demo delay (15s), configurable to 2m, 5m, 10m, 15m
+  takeoverDelaySeconds: 15,
   demoFastMode: true,
-  operatorPresence: 'present', // 'present' (At Desk - Review Mode) | 'away' (Unattended - Immediate Auto-Send)
-  aiReviewDelaySeconds: 15, // Pre-send review window for AI auto-responses (15s default, 5s, 10s, 30s, or 0)
+  operatorPresence: 'present',
+  aiReviewDelaySeconds: 15,
   scheduleSettings: {
     humanStart: '09:00',
     humanEnd: '17:00',
@@ -45,9 +46,9 @@ const DEFAULT_STATE = {
       customerName: 'Tanvir Ahmed',
       businessName: 'Lumina Natural Skincare',
       unreadCount: 0,
-      mode: 'auto', // 'auto' | 'human' | 'copilot'
-      handler: 'ai', // 'ai' | 'human'
-      status: 'AI Active', // 'AI Active' | 'Human Active' | 'AI Copilot' | 'Waiting for Human' | 'Human Requested' | 'Paused'
+      mode: 'at_desk', // 'at_desk' | 'away' | 'human'
+      handler: 'ai',
+      status: 'At Desk',
       aiEnabled: true,
       humanAvailable: true,
       takeoverTimerStartedAt: null,
@@ -131,19 +132,13 @@ const DEFAULT_STATE = {
       customerName: 'Farhan Karim',
       businessName: 'Apex Cloud Systems',
       unreadCount: 1,
-      mode: 'copilot',
-      handler: 'human',
-      status: 'AI Copilot',
+      mode: 'at_desk',
+      handler: 'ai',
+      status: 'At Desk',
       aiEnabled: true,
       humanAvailable: true,
       takeoverTimerStartedAt: null,
-      pendingDraft: {
-        id: 'draft-demo-002',
-        text: "Hi Farhan! For Apex Cloud's B2B ERP launch, LinkedIn Lead Gen forms combined with Google search ads typically offer the highest conversion rates. Would you like us to structure the brief around decision-maker targeting (CTOs & IT Directors)?",
-        originalText: "Hi Farhan! For Apex Cloud's B2B ERP launch, LinkedIn Lead Gen forms combined with Google search ads typically offer the highest conversion rates. Would you like us to structure the brief around decision-maker targeting (CTOs & IT Directors)?",
-        generatedAt: '10:48 AM',
-        status: 'pending'
-      },
+      pendingDraft: null,
       stepIndex: 3,
       campaign: {
         business: {
@@ -282,9 +277,9 @@ const DEFAULT_STATE = {
       customerName: 'Arif Chowdhury',
       businessName: 'FreshBite Express',
       unreadCount: 0,
-      mode: 'auto',
+      mode: 'at_desk',
       handler: 'ai',
-      status: 'AI Active',
+      status: 'Brief Completed',
       aiEnabled: true,
       humanAvailable: true,
       takeoverTimerStartedAt: null,
@@ -364,23 +359,31 @@ function loadState() {
       saveState(DEFAULT_STATE);
       return JSON.parse(JSON.stringify(DEFAULT_STATE));
     }
-    // Migration helpers for pre-send review window & presence
+    // Migration helpers for unified modes ('at_desk' | 'away' | 'human')
+    if (!parsed.operatorMode) parsed.operatorMode = 'at_desk';
     if (parsed.operatorPresence === undefined) parsed.operatorPresence = 'present';
     if (parsed.aiReviewDelaySeconds === undefined) parsed.aiReviewDelaySeconds = 15;
+
     Object.keys(parsed.conversations).forEach(k => {
       const c = parsed.conversations[k];
       if (c.pendingAutoSend === undefined) {
         c.pendingAutoSend = null;
-      } else if (c.pendingAutoSend) {
-        // If mode is human and pendingAutoSend exists, ensure isPaused is true
-        if (c.mode === 'human') {
+      }
+      // Migrate legacy modes
+      if (c.mode === 'auto' || c.mode === 'copilot') {
+        c.mode = 'at_desk';
+        c.status = 'At Desk';
+      }
+      if (c.pendingAutoSend) {
+        if (c.mode === 'at_desk') {
+          c.pendingAutoSend.noTimer = true;
+          c.pendingAutoSend.isPaused = true;
+          c.pendingAutoSend.expiresAt = null;
+        } else if (c.mode === 'human') {
           c.pendingAutoSend.isPaused = true;
           if (c.pendingAutoSend.pausedRemainingSeconds === undefined) {
             c.pendingAutoSend.pausedRemainingSeconds = c.pendingAutoSend.remainingSeconds || 5;
           }
-        } else if (!c.pendingAutoSend.isPaused && !c.pendingAutoSend.expiresAt) {
-          const sec = c.pendingAutoSend.remainingSeconds || 15;
-          c.pendingAutoSend.expiresAt = Date.now() + (sec * 1000);
         }
       }
     });
@@ -470,6 +473,94 @@ function onStateChange(callback) {
   };
 }
 
+/**
+ * Cross-tab typing indicator synchronization
+ */
+const TYPING_STORAGE_KEY = 'alias_typing_event_v1';
+const TYPING_EVENT = 'alias:typing_updated';
+
+// Unified cross-tab broadcast channel
+let typingBroadcastChannel = null;
+try {
+  if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+    typingBroadcastChannel = new BroadcastChannel('alias_typing_bus_v1');
+  }
+} catch (e) {}
+
+function setTypingStatus(convId, role, isTyping) {
+  if (!convId) return;
+  const payload = {
+    convId: String(convId),
+    role: String(role), // 'customer' | 'operator' | 'ai'
+    isTyping: Boolean(isTyping),
+    timestamp: Date.now(),
+    nonce: Math.random()
+  };
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(TYPING_STORAGE_KEY, JSON.stringify(payload));
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(TYPING_EVENT, { detail: payload }));
+    }
+    if (typingBroadcastChannel) {
+      typingBroadcastChannel.postMessage(payload);
+    }
+  } catch (err) {
+    console.error('Error broadcasting typing event:', err);
+  }
+}
+
+function subscribeTyping(callback) {
+  if (typeof window === 'undefined') return () => {};
+
+  let lastHandledNonce = null;
+  const safeCallback = (payload) => {
+    if (!payload || !payload.convId) return;
+    if (payload.nonce && payload.nonce === lastHandledNonce) return;
+    lastHandledNonce = payload.nonce;
+    try {
+      callback(payload);
+    } catch (err) {
+      console.error('Error in typing subscriber callback:', err);
+    }
+  };
+
+  // 1. Same-tab CustomEvent
+  const localHandler = (e) => {
+    if (e.detail) safeCallback(e.detail);
+  };
+  window.addEventListener(TYPING_EVENT, localHandler);
+
+  // 2. Cross-tab BroadcastChannel
+  let bcHandler = null;
+  if (typingBroadcastChannel) {
+    bcHandler = (e) => {
+      if (e.data) safeCallback(e.data);
+    };
+    typingBroadcastChannel.addEventListener('message', bcHandler);
+  }
+
+  // 3. Cross-tab storage fallback
+  const storageHandler = (e) => {
+    if (e.key === TYPING_STORAGE_KEY && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        safeCallback(parsed);
+      } catch (err) {}
+    }
+  };
+  window.addEventListener('storage', storageHandler);
+
+  return () => {
+    window.removeEventListener(TYPING_EVENT, localHandler);
+    window.removeEventListener('storage', storageHandler);
+    if (typingBroadcastChannel && bcHandler) {
+      typingBroadcastChannel.removeEventListener('message', bcHandler);
+    }
+  };
+}
+
 // Expose state API globally for clean vanilla JS access
 const AliasStateObj = {
   get: loadState,
@@ -478,6 +569,8 @@ const AliasStateObj = {
   reset: resetState,
   addAuditLog: addAuditLog,
   subscribe: onStateChange,
+  setTyping: setTypingStatus,
+  subscribeTyping: subscribeTyping,
   DEFAULT: DEFAULT_STATE
 };
 

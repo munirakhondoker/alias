@@ -128,14 +128,14 @@ const CampaignManager = {
     if (b.industry && b.industry.trim()) sections.business.completedCount++;
     else sections.business.missing.push('Industry');
 
-    if (b.description && b.description.trim()) sections.business.completedCount++;
-    else sections.business.missing.push('Business Description');
-
     if (b.productName && b.productName.trim()) sections.business.completedCount++;
     else sections.business.missing.push('Product / Service Name');
 
-    if (b.productDescription && b.productDescription.trim()) sections.business.completedCount++;
-    else sections.business.missing.push('Product / Service Description');
+    if ((b.usp && b.usp.trim()) || (b.productDescription && b.productDescription.trim()) || (b.description && b.description.trim())) sections.business.completedCount++;
+    else sections.business.missing.push('USP');
+
+    if (b.websiteUrl && b.websiteUrl.trim()) sections.business.completedCount++;
+    else sections.business.missing.push('Website');
 
     // 2. Marketing Objectives
     const obj = campaign.objective || {};
